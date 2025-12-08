@@ -1,0 +1,1920 @@
+---
+title: Activitat 3 - Modelització predictiva
+author: "Robert Buj"
+date: "19/12/2025"
+output:
+  pdf_document:
+    includes:
+      in_header: header.tex
+    toc: true
+    toc_depth: 2
+    number_sections: true
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: true
+toc-title: "Taula de continguts"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, error = FALSE, message = FALSE)
+library(readr)
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(corrplot)
+library(scatterplot3d)
+library(stats)
+library(caret)
+library(car)
+library(knitr)
+library(kableExtra)
+library(formattable)
+library(pROC)
+library(tidyr)
+```
+
+\newpage
+\renewcommand{\arraystretch}{1.5}
+
+# Regressió Lineal
+
+En aquesta primera part, construirem un model per predir el salari brut anual
+(```RETRINOIN```).
+
+## Càrrega i preparació de les dades
+
+Carregueu el fitxer de dades ```salarios_INE_2022_sample.csv``` i reviseu-ne
+l'estructura. Identifiqueu les variables categòriques codificades (com
+```SEXO``` o ``ESTU``) i convertiu-les a factor, incloses ```CNACE``` i
+```CNO1```, després de recodificar-les en els tres nivells indicats més avall.
+
+Assigneu etiquetes descriptives als nivells dels factors per facilitar la
+interpretació posterior (p. ex. 1 correspon a “Home” i 6 a “Dona”). Podeu
+consultar el diccionari de variables annex (```dr_EES_2022.xlsx```) per explorar
+millor els codis i descripcions.
+
+Per a les variables ```CNACE``` i ```CNO1```, consulteu les taules ``TCNAE`` i
+```TCNO```, respectivament, a l'últim full de l'Excel (Tablas2). L'objectiu és
+crear les variables ```CNACE_grp``` i ``CNO1_grp``. Per a la primera,
+categoritzeu la variable ```CNACE``` en tres nivells (etiquetant-los com
+correspongui segons les descripcions): 1: comencen per B, C, D, E, F; 2:
+comencen per O, P, Q; 3: la resta. Per a la darrera, categoritzeu ```CNO1```
+segons el rang en el codi d'ocupació: 1: A0-C0; 2: D0-J0; 3: la resta.
+
+Per simplicitat, en aquesta activitat tractarem totes les variables categòriques
+com a factors nominals, incloses aquelles que tenen un ordre natural, com els
+grups d'edat (```ANOS2```) o el nivell d'estudis (```ESTU```).
+
+**Resposta:**
+
+```{r, attr.source='.numberLines'}
+# Carrega de dades
+dataset <- read_csv("data/salarios_INE_2022_sample.csv")
+# Mostra el tipus de dades de cada columna
+# glimpse(dataset)
+# Preparació de les dades
+dataset <- dataset |>
+  mutate(
+    # T1Sino
+    RESPONSA = factor(RESPONSA,
+      levels = c(0, 1),
+      labels = c("No", "Sí")
+    ),
+    # TContra
+    TIPOCON = factor(TIPOCON,
+      levels = c(1, 2),
+      labels = c(
+        "Durada indefinida",
+        "Durada determinada"
+      )
+    ),
+    # TContro
+    CONTROL = factor(CONTROL,
+      levels = c(1, 2),
+      labels = c(
+        "Públic",
+        "Privat"
+      )
+    ),
+    # TEdad
+    ANOS2 = factor(ANOS2,
+      levels = c(1, 2, 3, 4, 5, 6),
+      labels = c(
+        "Menys de 20",
+        "De 20 a 29",
+        "De 30 a 39",
+        "De 40 a 49",
+        "De 50 a 59",
+        "Més de 59"
+      )
+    ),
+    # TJornad
+    TIPOJOR = factor(TIPOJOR,
+      levels = c(1, 2),
+      labels = c(
+        "Temps complet",
+        "Temps parcial"
+      )
+    ),
+    # TMercad
+    MERCADO = factor(MERCADO,
+      levels = c(1, 2, 3, 4),
+      labels = c(
+        "Local o regional",
+        "Nacional",
+        "Unió Europea",
+        "Mundial"
+      )
+    ),
+    # TNUTS
+    NUTS1 = factor(NUTS1,
+      levels = c(1, 2, 3, 4, 5, 6, 7),
+      labels = c(
+        "Nord-oest",
+        "Nord-est",
+        "Comunitat de Madrid",
+        "Centre",
+        "Est",
+        "Sud",
+        "Canàries"
+      )
+    ),
+    # TPais
+    TIPOPAIS = factor(TIPOPAIS,
+      levels = c(1, 2),
+      labels = c("Espanya", "Resta del món")
+    ),
+    # TRegula
+    REGULACION = factor(REGULACION,
+      levels = c(1, 2, 3, 4, 5),
+      labels = c(
+        "Estatal sectorial",
+        "Sectorial d'àmbit inferior",
+        "D'empresa o grup d'empreses",
+        "Centre de treball",
+        "Altres formes de regulació"
+      )
+    ),
+    # TSexo
+    SEXO = factor(SEXO, levels = c(1, 6), labels = c("Home", "Dona")),
+    # TSino
+    SIESPM1 = factor(SIESPM1,
+      levels = c(1, 6),
+      labels = c("Sí", "No")
+    ),
+    SIESPM2 = factor(SIESPM2,
+      levels = c(1, 6),
+      labels = c("Sí", "No")
+    ),
+    SIESPA1 = factor(SIESPA1,
+      levels = c(1, 6),
+      labels = c("Sí", "No")
+    ),
+    SIESPA2 = factor(SIESPA2,
+      levels = c(1, 6),
+      labels = c("Sí", "No")
+    ),
+    SIESPA3 = factor(SIESPA3,
+      levels = c(1, 6),
+      labels = c("Sí", "No")
+    ),
+    SIESPA4 = factor(SIESPA4,
+      levels = c(1, 6),
+      labels = c("Sí", "No")
+    ),
+    # TTitula
+    ESTU = factor(ESTU,
+      levels = c(1, 2, 3, 4, 5, 6, 7),
+      labels = c(
+        "Menys que primària",
+        "Educació primària",
+        "Primera etapa d'educació secundària",
+        "Segona etapa d'educació secundària",
+        "Ensenyaments de formació professional de grau superior i similars",
+        "Diplomats universitaris i similars",
+        "Llicenciats i similars, i doctors universitaris"
+      )
+    ),
+    # TTrabaj
+    ESTRATO2 = factor(ESTRATO2,
+      levels = c(0, 1, 2, 3, 4),
+      labels = c(
+        "Inclou tots els estrats",
+        "D'1 a 49 treballadors",
+        "De 50 a 199 treballadors",
+        "Més de 200 treballadors",
+        "Inclou estrat 2 i 3"
+      )
+    ),
+    # Nova variable categòrica TCNAE_grp
+    CNACE_grp = case_when(
+      substr(as.character(CNACE), 1, 1) %in% c("B", "C", "D", "E", "F") ~ "1",
+      substr(as.character(CNACE), 1, 1) %in% c("O", "P", "Q") ~ "2",
+      TRUE ~ "3"
+    ),
+    CNACE_grp = factor(CNACE_grp,
+      levels = c("1", "2", "3"),
+      labels = c("B-F", "O-Q", "Altres")
+    ),
+    # Nova variable categòrica TCNO1_grp
+    CNO1_grp = case_when(
+      CNO1 >= "A0" & CNO1 <= "C0" ~ "1",
+      CNO1 >= "D0" & CNO1 <= "J0" ~ "2",
+      TRUE ~ "3"
+    ),
+    CNO1_grp = factor(CNO1_grp,
+      levels = c("1", "2", "3"),
+      labels = c("A0-C0", "D0-J0", "Altres")
+    ),
+    # Conversió de tipus de dades de variables quantitatives enteres
+    FIJODISM = as.integer(FIJODISM),
+    DRELABAM = as.integer(DRELABAM),
+    DRELABM = as.integer(DRELABM),
+    DSIESPM1 = as.integer(DSIESPM1),
+    DSIESPM2 = as.integer(DSIESPM2),
+    DRELABAD = as.integer(DRELABAD),
+    DSIESPA1 = as.integer(DSIESPA1),
+    DSIESPA2 = as.integer(DSIESPA2),
+    DSIESPA3 = as.integer(DSIESPA3),
+    DSIESPA4 = as.integer(DSIESPA4),
+    JSP2 = as.integer(JSP2),
+    VAL = as.integer(VAL),
+    VAN = as.integer(VAN),
+    PUENTES = as.integer(PUENTES),
+    JSP1 = as.integer(JSP1),
+    HEXTRA = as.integer(HEXTRA),
+    JAP = as.integer(JAP),
+    MESANTI = as.integer(MESANTI),
+    ANOANTI = as.integer(ANOANTI),
+    NUTS1 = as.integer(NUTS1),
+  )
+# Mostra el tipus de dades de cada columna
+# glimpse(dataset)
+```
+
+## Estudi de correlació lineal
+
+Calculeu la matriu de correlació lineal entre totes les variables quantitatives
+de l'estudi i interpreteu-la.
+
+**Resposta:**
+
+```{r, attr.source='.numberLines', fig.align='center'}
+# Selecció de les variables quantitatives
+quantitative_vars <- colnames(dataset)[sapply(dataset, is.numeric)]
+# Calcular la matriu de correlació
+cor_matrix <- cor(dataset[, quantitative_vars], use = "pairwise.complete.obs")
+# Mostrar la gràfica de la matriu de correlacions
+corrplot(cor_matrix,
+  type = "upper", order = "hclust",
+  tl.col = "black",
+  tl.srt = 60,
+  method = "circle",
+  tl.len = 0.8,
+  cex.main = 1.5,
+  tl.cex = 0.6,
+)
+```
+```{r, echo=FALSE}
+# Mostrar només els valors destacats matriu de correlacions amb kable
+# Establir com a NA els valor més petits que 0,85 i més grans que -0,85
+cor_matrix[abs(cor_matrix) < 0.85] <- NA
+# Eliminar les files i columnes amb tots els valors NA
+cor_matrix <- cor_matrix[rowSums(is.na(cor_matrix)) != ncol(cor_matrix) - 1, ]
+cor_matrix <- cor_matrix[, colSums(is.na(cor_matrix)) != nrow(cor_matrix)]
+# Mostrar la matriu de correlacions amb valors destacats
+kable(round(cor_matrix, 2),
+  format.args = list(decimal.mark = ",", big.mark = ".", digits = 2),
+  caption = "Matriu de correlacions (valors destacats)"
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+# Elimina els objectes temporals
+rm(cor_matrix, quantitative_vars)
+```
+
+S'observa que hi ha tres valors de correlació molt propers a u o menys u: 0,95,
+0,93, -0,92	i 0,91. El valor negatiu -0,92 és el valor obtingut entre les
+variables ```VAL``` i ```VAN```. Aquest valor negatiu proper a -1 indica que les
+variables estan linealment relacionades en sentit invers (correlació negativa);
+això vol dir que quan augmenta el valor d'una variable el valor de l'altra
+variable disminueix. Els altres valors positius amb valors propers a 1, entre
+les variables ```COTIZA``` i ```BASE``` (0,95), ```JAP``` i ```JSP1``` (0,93),
+així com entre ```IRPFMES``` i ```RETRINOIN``` (0,91), indiquen les variables
+presenten una dependència lineal en sentit directe (correlació positiva). En
+aquests casos una variable és redundant respecte a l'altra i es podria eliminar.
+
+## Estudi comparatiu del salari
+
+Representeu gràficament la variació del salari (```RETRINOIN```) segons el sexe
+i segons la nacionalitat (dos gràfics en total). Atès que la distribució del
+salari és molt asimètrica, heu de complementar la visualització o bé amb un
+```summary()``` o bé aplicant una transformació a l'eix Y (només per a la
+visualització). Interpreteu els resultats.
+
+**Resposta:**
+
+```{r, attr.source='.numberLines', fig.align='center'}
+# Gràfic de salari segons el sexe
+plot1 <- ggplot(dataset, aes(x = SEXO, y = RETRINOIN)) +
+  geom_boxplot(fill = c("lightblue", "lightpink")) +
+  scale_y_log10() +
+  labs(
+    title = "D. del salari segons el sexe",
+    x = "Sexe",
+    y = "Salari brut anual (escala logarítmica)"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+# Gràfic de salari segons el sexe sense valors atípics
+plot2 <- ggplot(dataset, aes(x = SEXO, y = RETRINOIN)) +
+  geom_boxplot(fill = c("lightblue", "lightpink"), outlier.shape = NA) +
+  labs(
+    title = "D. del salari segons el sexe\n(sense outliers)",
+    x = "Sexe",
+    y = "Salari brut anual (escala logarítmica)"
+  ) +
+  theme_minimal() +
+  scale_y_log10(limits = c(
+    quantile(dataset$RETRINOIN, 0.05),
+    quantile(dataset$RETRINOIN, 0.95)
+  )) +
+  theme(plot.title = element_text(hjust = 0.5))
+# Mostrar els dos gràfics junts
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+```{r, echo=FALSE}
+# Elimina els objectes temporals
+rm(plot1, plot2)
+# Resum estadístic del salari segons el sexe
+summary_by_sex <- dataset |>
+  group_by(SEXO) |>
+  summarise(
+    Min = min(RETRINOIN, na.rm = TRUE),
+    Q1 = quantile(RETRINOIN, 0.25, na.rm = TRUE),
+    Median = median(RETRINOIN, na.rm = TRUE),
+    Mean = mean(RETRINOIN, na.rm = TRUE),
+    Q3 = quantile(RETRINOIN, 0.75, na.rm = TRUE),
+    Max = max(RETRINOIN, na.rm = TRUE)
+  )
+kable(summary_by_sex,
+  format.args = list(decimal.mark = ",", big.mark = "."),
+  caption = "Resum estadístic del salari segons el sexe (escala lineal)"
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+# Elimina els objectes temporals
+rm(summary_by_sex)
+
+# Resum estadístic del salari segons el sexe sense valors atípics
+summary_by_sex_no_outliers <- dataset |>
+  filter(
+    RETRINOIN >= quantile(RETRINOIN, 0.05),
+    RETRINOIN <= quantile(RETRINOIN, 0.95)
+  ) |>
+  group_by(SEXO) |>
+  summarise(
+    Min = min(RETRINOIN, na.rm = TRUE),
+    Q1 = quantile(RETRINOIN, 0.25, na.rm = TRUE),
+    Median = median(RETRINOIN, na.rm = TRUE),
+    Mean = mean(RETRINOIN, na.rm = TRUE),
+    Q3 = quantile(RETRINOIN, 0.75, na.rm = TRUE),
+    Max = max(RETRINOIN, na.rm = TRUE)
+  )
+kable(summary_by_sex_no_outliers,
+  format.args = list(decimal.mark = ",", big.mark = "."),
+  caption = paste(
+    "Resum estadístic del salari segons el sexe",
+    "(sense outliers, escala lineal)"
+  )
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+# Elimina els objectes temporals
+rm(summary_by_sex_no_outliers)
+```
+
+\newpage
+
+```{r, attr.source='.numberLines', fig.align='center'}
+# Gràfic de salari segons la nacionalitat
+plot1 <- ggplot(dataset, aes(x = TIPOPAIS, y = RETRINOIN)) +
+  geom_boxplot(fill = c("lightgreen", "lightcoral")) +
+  scale_y_log10() +
+  labs(
+    title = "D. del salari segons nacionalitat",
+    x = "Nacionalitat",
+    y = "Salari brut anual (escala logarítmica)"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+# Gràfic de salari segons la nacionalitat sense valors atípics
+plot2 <- ggplot(dataset, aes(x = TIPOPAIS, y = RETRINOIN)) +
+  geom_boxplot(fill = c("lightgreen", "lightcoral"), outlier.shape = NA) +
+  labs(
+    title = "D. del salari segons nacionalitat\n(sense outliers)",
+    x = "Nacionalitat",
+    y = "Salari brut anual (escala logarítmica)"
+  ) +
+  theme_minimal() +
+  scale_y_log10(limits = c(
+    quantile(dataset$RETRINOIN, 0.05),
+    quantile(dataset$RETRINOIN, 0.95)
+  )) +
+  theme(plot.title = element_text(hjust = 0.5))
+# Mostrar els dos gràfics junts
+grid.arrange(plot1, plot2, ncol = 2)
+```
+
+```{r, echo=FALSE}
+# Elimina els objectes temporals
+rm(plot1, plot2)
+# Resum estadístic del salari segons la nacionalitat
+summary_by_nationality <- dataset |>
+  group_by(TIPOPAIS) |>
+  summarise(
+    Min = min(RETRINOIN, na.rm = TRUE),
+    Q1 = quantile(RETRINOIN, 0.25, na.rm = TRUE),
+    Median = median(RETRINOIN, na.rm = TRUE),
+    Mean = mean(RETRINOIN, na.rm = TRUE),
+    Q3 = quantile(RETRINOIN, 0.75, na.rm = TRUE),
+    Max = max(RETRINOIN, na.rm = TRUE)
+  )
+kable(summary_by_nationality,
+  format.args = list(decimal.mark = ",", big.mark = "."),
+  caption = paste(
+    "Resum estadístic del salari segons la nacionalitat",
+    "(escala lineal)"
+  )
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+# Elimina els objectes temporals
+rm(summary_by_nationality)
+
+# Resum estadístic del salari segons la nacionalitat sense valors atípics
+summary_by_nationality_no_outliers <- dataset |>
+  filter(
+    RETRINOIN >= quantile(RETRINOIN, 0.05),
+    RETRINOIN <= quantile(RETRINOIN, 0.95)
+  ) |>
+  group_by(TIPOPAIS) |>
+  summarise(
+    Min = min(RETRINOIN, na.rm = TRUE),
+    Q1 = quantile(RETRINOIN, 0.25, na.rm = TRUE),
+    Median = median(RETRINOIN, na.rm = TRUE),
+    Mean = mean(RETRINOIN, na.rm = TRUE),
+    Q3 = quantile(RETRINOIN, 0.75, na.rm = TRUE),
+    Max = max(RETRINOIN, na.rm = TRUE)
+  )
+kable(summary_by_nationality_no_outliers,
+  format.args = list(decimal.mark = ",", big.mark = "."),
+  caption = paste(
+    "Resum estadístic del salari segons la nacionalitat",
+    "(sense outliers, escala lineal)"
+  )
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+# Elimina els objectes temporals
+rm(summary_by_nationality_no_outliers)
+```
+
+En els dos gràfics de caixa es pot observar que hi ha diferències en la
+distribució del salari segons el sexe i la nacionalitat.
+
+En el cas del sexe, els homes tendeixen a tenir salaris més alts que les dones,
+amb una mediana i una mitjana superiors. En el diagrama de caixa es pot veure
+que hi ha més valors atípics (outliers) en els salaris dels homes, especialment
+en la part superior de la distribució. En el diagrama de caixa, els límits
+superior i inferior són més o menys iguals en ambdós sexes, el límit inferior és
+més baix en les dones que en els homes, no obstant això en el resum estadístic
+sense valors atípics els límits són més similars. A més, en el resum estadístic
+la diferència de salaris es redueix significativament sense tenir en compte els
+valors atípics.
+
+Pel que fa a la nacionalitat, els treballadors nacionals tendeixen a tenir
+salaris més alts que els treballadors estrangers, amb una mediana i una mitjana
+superiors. En el diagrama de caixa podem veure que a escala logarítmica els
+treballadors estrangers tenen menys valors atípics en la part superior i inferior
+de la distribució, mentre que els valors dels límits són gairebé iguals en
+ambdós grups, com també es pot veure en el resum estadístic després de treure
+els valors atípics. Igual que en el cas del sexe, la diferència de salaris es
+redueix significativament sense tenir en compte els valors atípics.
+
+## Generació dels conjunts d'entrenament i de test
+
+Ara separarem el conjunt de dades en dues parts: el conjunt d'entrenament
+(```train```), que inclourà un 80 % de les dades, i el conjunt de prova
+(```test```), que inclourà el 20 % restant. En els següents apartats, ajustarem
+el model de regressió lineal amb el conjunt d'entrenament i n'avaluarem el
+rendiment amb el conjunt de prova. Fixeu una llavor (```set.seed(42)```) per
+assegurar la reproductibilitat.
+
+**Resposta:**
+
+```{r, attr.source='.numberLines'}
+# Fixem el valor de la llavor per a la reproductibilitat
+set.seed(42)
+# Separació del conjunt de dades en train i test de forma aleatòria
+train_indexes <- sample(1:nrow(dataset), size = 0.8 * nrow(dataset))
+train_dataset <- dataset[train_indexes, ]
+test_dataset <- dataset[-train_indexes, ]
+```
+
+## Estimació de models de regressió lineals simples amb variable qualitativa
+
+Volem analitzar si existeixen desigualtats estructurals associades a
+característiques demogràfiques, sense “contaminar-les” encara amb altres
+variables. A això ho anomenem analitzar la **bretxa salarial bruta**.
+
+Estimeu dos models lineals simples per separat: 1. ```RETRINOIN``` en funció de
+```SEXO```. 2. ```RETRINOIN``` en funció de ```TIPOPAIS``` (Nacionalitat).
+
+Per a cadascun dels models:
+
+- A partir de la sortida del model, indiqueu quina és la **diferència salarial
+  mitjana estimada** entre els grups i quin seria el salari mitjà del grup més
+  desfavorable.
+- Indiqueu si aquestes diferències són **estadísticament significatives** i
+  justifiqueu la resposta citant el p-valor corresponent.
+- Interpreteu els valors de R^2^ ajustat i expliqueu què ens diu sobre la
+  capacitat explicativa del model.
+
+**Resposta:**
+
+```{r, attr.source='.numberLines'}
+# Model 1: RETRINOIN en funció de SEXO
+model_sexo <- glm(
+  formula = RETRINOIN ~ SEXO,
+  data = train_dataset,
+  family = gaussian(),
+)
+# Resum del model
+summary(model_sexo)
+# Calcular R² manualment
+# R² = 1 - (Deviance del model / Deviance del model nul)
+r_sq <- 1 - (model_sexo$deviance / model_sexo$null.deviance)
+r_sq
+```
+
+En la taula següent es pot veure l'efecte de la variable ```SEXO``` en el model
+de regressió lineal:
+
+```{r, attr.source='.numberLines'}
+estimation_15_sexo <- coef(summary(model_sexo))[, "Estimate"]
+# Mostra la taula amb kable
+kable(estimation_15_sexo,
+  format.args = list(decimal.mark = ",", big.mark = ".", digits = 2),
+  caption = "Efecte de les variable SEXO sobre RETRINOIN",
+  col.names = c("Variable[Classe]", "Efecte")
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+```
+
+```{r, echo=FALSE}
+# Elimina els objectes temporals
+rm(r_sq, model_sexo)
+```
+
+La diferència salarial mitjana estimada entre homes i dones és de 6.472,0 euros.
+El salari mitjà del grup més desfavorable és el de les dones, amb 24.581,9
+euros. Explicació del sou mitja segons el gènere:
+$Y = \beta_0 + \beta_1 D + \epsilon$, on:
+
+- $Y$ és el salari mitjà (RETRINOIN)
+- $\beta_0$ és el sou mitja del grup de referència (31.053,9 euros)
+- D (de dummy en anglès) és una variable indicadora que val 0 per als homes i 1
+  per a les dones
+- $\beta_1$ és la diferència salarial mitjana entre homes i dones (-6.472,0
+  euros)
+- $\epsilon$ és l'error aleatori
+
+Aquestes diferències són estadísticament significatives, ja que els p-valors
+associats als coeficients són molt petits (menys de 0,05), concretament
+el p-valor és <2e-16 per ambdós sexes.
+
+El valor de R^2^ ajustat és molt baix 1,742886 %, que indica que el genere
+explica aproximadament el 1,74 % de la variabilitat dels sous
+
+```{r, attr.source='.numberLines'}
+# Model 2: RETRINOIN en funció de TIPOPAIS
+model_nacionalitat <- glm(
+  formula = RETRINOIN ~ TIPOPAIS,
+  data = train_dataset,
+  family = gaussian(),
+)
+# Resum del model
+summary(model_nacionalitat)
+# Calcular R² manualment
+# R² = 1 - (Deviance del model / Deviance del model nul)
+r_sq <- 1 - (model_nacionalitat$deviance / model_nacionalitat$null.deviance)
+r_sq
+```
+
+En la taula següent es pot veure l'efecte de la variable ```TIPOPAIS``` sobre
+la variable resposta ```RETRINOIN```:
+
+```{r, attr.source='.numberLines'}
+estimation_15_nacionalitat <- coef(summary(model_nacionalitat))[, "Estimate"]
+# Mostra la taula amb kable
+kable(estimation_15_nacionalitat,
+  format.args = list(decimal.mark = ",", big.mark = ".", digits = 2),
+  caption = "Efecte de les variable TIPOPAIS sobre RETRINOIN",
+  col.names = c("Variable[Classe]", "Efecte")
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+```
+
+```{r, echo=FALSE}
+# Elimina els objectes temporals
+rm(r_sq, model_nacionalitat)
+```
+
+La diferència salarial mitjana estimada entre treballadors nacionals i
+estrangers és de 5.547,20 euros. El salari mitjà del grup més desfavorable és el
+de la població estrangera, amb 22.985,4 euros. Explicació del sou mitja segons
+la nacionalitat: $Y = \beta_0 + \beta_1 D + \epsilon$, on:
+
+- $Y$ és el salari mitjà (RETRINOIN)
+- $\beta_0$ és el sou mitja del grup de referència (28.532,6 euros)
+- D (de dummy en anglès) és una variable indicadora que val 0 per als
+  treballadors nacionals i 1 per als estrangers
+- $\beta_1$ és la diferència salarial mitjana entre treballadors nacionals i
+  estrangers (5.547,20 euros)
+- $\epsilon$ és l'error aleatori
+
+Aquestes diferències són estadísticament significatives, ja que els p-valors
+associats als coeficients són molt petits (menys de 0,05), concretament
+el p-valor és < 2e-16 per als treballadors nacionals i 2,2e-07 per als
+estrangers.
+
+El valor de R^2^ ajustat és molt baix 0,3352048 %, que indica que la
+nacionalitat explica aproximadament el 0,34 % de la variabilitat dels sous.
+
+En la taula següent es pot veure una comparació dels dos models anteriors:
+
+```{r, attr.source='.numberLines'}
+sexo_summary <- data.frame(
+  Model = c("SEXO", "TIPOPAIS"),
+  Bretxa_Salarial_Euros = c(
+    as.numeric(estimation_15_sexo["(Intercept)"]),
+    as.numeric(estimation_15_nacionalitat["(Intercept)"])
+  ),
+  Classe_Més_Desfavorable = c("Dona", "Resta del món"),
+  Efecte_SEXO_Euros = c(
+    as.numeric(estimation_15_sexo["SEXODona"]),
+    as.numeric(estimation_15_nacionalitat["TIPOPAISResta del món"])
+  )
+)
+kable(sexo_summary,
+  format.args = list(decimal.mark = ",", big.mark = ".", digits = 2),
+  caption = "Comparació de les variables SEXO i TIPOPAIS sobre RETRINOIN",
+  col.names = c("Model", "Salari mig", "Classe més desfavorable", "Efecte")
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+```
+
+## Estimació del model de regressió lineal múltiple amb predictors quantitatius
+
+Es suggereix que el salari hauria de dependre principalment de la quantitat de
+feina i l'experiència. Per comprovar-ho, estimeu un model utilitzant **únicament
+les variables quantitatives explicatives** del dataset: l'antiguitat
+(```ANOANTI```) i la jornada anual pactada (```JAP```). Interpreteu els
+coeficients i els valors de R^2^ ajustat.
+
+**Resposta:**
+
+```{r, attr.source='.numberLines', fig.align='center'}
+# Model múltiple amb variables quantitatives
+model_quantitative <- glm(
+  formula = RETRINOIN ~ ANOANTI + JAP,
+  data = train_dataset,
+  family = gaussian(),
+)
+summary(model_quantitative)
+# Calcular R²
+# R² = 1 - (Deviance del model / Deviance del model nul)
+r_sq <- 1 - (model_quantitative$deviance / model_quantitative$null.deviance)
+r_sq
+# Crear gràfic 3D amb scatterplot3d amb 20 punts aleatoris al gràfic
+random_indexes <- sample(nrow(train_dataset), 20)
+s3d <- scatterplot3d(
+  train_dataset$ANOANTI[random_indexes],
+  train_dataset$JAP[random_indexes],
+  train_dataset$RETRINOIN[random_indexes],
+  type = "h",
+  color = "red",
+  xlab = "Anys d'antiguitat (anys)",
+  ylab = "Jornada anual pactada (hores)",
+  zlab = "Salari (euros)",
+  main = "Regressió múltiple: Salari ~ Antiguitat + Jornada anual pactada"
+)
+# Afegir el pla de regressió
+s3d$plane3d(model_quantitative, lty = "solid", col = "lightblue")
+```
+
+```{r, echo=FALSE}
+# Elimina els objectes temporals
+rm(model_quantitative, r_sq, random_indexes, s3d)
+```
+
+Explicació del salari en funció del valor les variables quantitatives ```JAP```
+i ```ANOANTI```:
+$Y = \beta_0 + \beta_1 J + \beta_2 A + \epsilon$, on:
+
+- $Y$ és el salari
+- $\beta_0$ és el salari quan les variables explicatives són zero (-5.862,9176
+  euros)
+- $\beta_1$ és l' efecte de la jornada anual pactada sobre el salari (16,3664
+  euros)
+- $J$ són els dies de la jornada anual pactada (JAP, 0-9999)
+- $\beta_2$ és l'efecte dels anys d'antiguitat sobre el salari (712,8970 euros)
+- $A$ són els anys d'antiguitat (ANOANTI, 0-99)
+- $\epsilon$ és l'error aleatori
+
+Les diferències són estadísticament significatives, ja que els p-valors
+associats als coeficients són molt petits (menys de 0,05), concretament el
+p-valor és <2e-16 per ambdues variables quantitatives.
+
+El valor de R^2^ és baix 14,91836 %, que indica que ambdues variables
+quantitatives expliquen aproximadament el 15 % de la variabilitat dels sous.
+
+## Estimació del model de regressió lineal múltiple amb predictors quantitatius i qualitatius
+
+Estimeu el model complet afegint les variables qualitatives (```SEXO```,
+```TIPOPAIS```, ```ESTU```, etc.) al model quantitatiu anterior.
+
+Un cop aplicat el model i en funció dels resultats, decidiu quines de les
+variables explicatives proposades fins al moment s'han de mantenir en el model
+de regressió lineal. Per prendre aquestes decisions no utilitzeu mètodes de
+selecció automàtica. Considereu:
+
+- la significació estadística de les variables,
+- el valor del coeficient de determinació ajustat,
+- i la possible existència de problemes de multicol·linealitat.
+
+Per avaluar la multicol·linealitat, podeu utilitzar mesures com el Factor
+d'Inflació de la Variància (```VIF```) mitjançant la funció ```vif()```. Com a
+referència orientativa, un ```VIF = 1``` indica absència de col·linealitat i
+valors superiors a 5 poden considerar-se potencialment problemàtics. No cal fer
+un estudi exhaustiu, però sí justificar si alguna variable podria ser redundant.
+
+Sobre el model final (eliminant, si cal, les variables redundants), observeu què
+ha passat amb els coeficients de ```SEXO``` i ```TIPOPAIS``` respecte a
+l'apartat 1.5. En controlar per altres variables (obtenint una **bretxa salarial
+ajustada**), què ha succeït? Quina explicació li podríem donar?
+
+Tingueu en compte que pot haver-hi més d'una especificació raonable de model
+final, sempre que les decisions estiguin ben justificades.
+
+**Resposta:**
+
+```{r, attr.source='.numberLines'}
+# Funció que retorna un model i el valor de R^2 a partir d'una fórmula i un
+# conjunt de dades
+build_model <- function(qualitative_vars, data) {
+  # Construir la fórmula del model afegint totes les variables qualitatives
+  formula_mixed <- as.formula(
+    paste(
+      "RETRINOIN ~ ANOANTI + JAP +",
+      paste(qualitative_vars, collapse = " + ")
+    )
+  )
+  # Model múltiple amb variables quantitatives i qualitatives
+  model <- glm(
+    formula = formula_mixed,
+    data = train_dataset,
+    family = gaussian(),
+  )
+  # Calcular R²
+  # R² = 1 - (Deviance del model / Deviance del model nul)
+  r_sq <- 1 - (model$deviance / model$null.deviance)
+  return(list(model = model, r_sq = r_sq))
+}
+```
+
+Per construir el model amb totes les variables qualitatives, primer
+identificarem les variables qualitatives del conjunt de dades i les afegirem a
+la fórmula del model juntament amb les variables quantitatives ```ANOANTI``` i
+```JAP```.
+
+```{r, attr.source='.numberLines'}
+# Creem una llista amb variables qualitatives a incloure en el model
+qualitative_vars <- colnames(dataset)[sapply(dataset, is.factor)]
+qualitative_vars
+# Creem el model mixt amb les dues variables quantitatives i les variables
+# qualitatives de la llista
+mixed <- build_model(qualitative_vars, train_dataset)
+# Salvaguardem el valor de R²
+r_sq <- mixed$r_sq
+# Mostrem el valor de R² del model
+mixed$r_sq
+```
+
+En la següent taula es mostren els efectes de les variables explicatives en el
+model mixt.
+
+```{r, attr.source='.numberLines'}
+estimation_17 <- coef(summary(mixed$model))[, "Estimate"]
+# Mostra la taula amb kable
+kable(estimation_17,
+  format.args = list(decimal.mark = ",", big.mark = ".", digits = 2),
+  caption = "Efecte de les variables explicatives en el model mixt",
+  col.names = c("Variable[Classe]", "Efecte")
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+```
+
+Com a estrategia per seleccionar les variables del model final, se selecciona
+l'estrategia seqüencial cap enrere (backward selection), on s'elimina una
+variable cada vegada, començant per la menys significativa (amb el p-valor més
+alt), fins que totes les variables restants siguin estadísticament
+significatives (p-valor menor a 0,05). Després d'eliminar una variable
+explicativa del model, s'ha de recalcular el model i els valors VIF per
+comprovar si hi ha problemes de multicol·linealitat. Si es detecta algun
+problema de multicol·linealitat (VIF > 5), s'ha d'eliminar la variable amb el
+VIF més alt i recalcular el model i els valors VIF. Si hi ha alguna variable
+categòrica amb més de dues classes, la columna $GVIF^(1/(2*Df))$ s'ha de
+utilitzar per determinar si hi ha problemes de multicol·linealitat (valors
+superiors a 5).
+
+També comprovarem el valor
+de R^2^ per assegurar-nos que el model segueix sent adequat després de cada
+eliminació de variable.
+
+### Primera eliminació de variables explicatives no significatives
+
+A continuació mostrarem els valors VIF de les variables explicatives, per veure
+si hi ha problemes de multicol·linealitat en el model inicial.
+
+```{r, attr.source='.numberLines'}
+# Valors VIF
+vif(mixed$model)
+```
+
+No hi cap problema de multicol·linealitat en el model inicial, per la qual cosa
+consultarem la taula amb la significança de les variables explicatives per
+decidir quina variable eliminar.
+
+```{r, attr.source='.numberLines'}
+significacio <- coef(summary(mixed$model))[, "Pr(>|t|)"]
+significacio <- sort(significacio, decreasing = TRUE)
+significacio <- significacio[!grepl("(Intercept)", names(significacio))]
+# Només amb els valors més grans que 0,05 (variables no significatives)
+significacio_baixa <- significacio[significacio > 0.05]
+# Mostra la taula amb kable
+kable(significacio_baixa,
+  format.args = list(decimal.mark = ",", big.mark = "."),
+  caption = "Variables explicatives no significatives",
+  col.names = c("Variable[Classe]", "p-valor")
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+```
+
+No eliminarem la variable ```ESTU```, ja que no totes les classes tenen un
+p-valor superior a 0,05.
+
+```{r, attr.source='.numberLines'}
+significacio[grep("ESTU", names(significacio))]
+```
+
+Observem que no hi ha cap classe de la variable ```ANOS2``` que sigui
+significativa (p-valor < 0,05).
+
+```{r, attr.source='.numberLines'}
+significacio[grep("ANOS2", names(significacio))]
+```
+
+Per tant eliminarem la variable ```ANOS2```.
+
+```{r, attr.source='.numberLines'}
+# Eliminació de la variable no significativa ANOS2 de qualitative_vars
+qualitative_vars <- setdiff(qualitative_vars, "ANOS2")
+# Construir el model sense la variable ANOS2
+mixed <- build_model(qualitative_vars, train_dataset)
+```
+
+Després d'eliminar la variable ```ANOS2``` el valor de R^2^ ha baixat un 0,5 %.
+
+```{r, attr.source='.numberLines'}
+# Mostrar el valor de R² el nou model i la diferència amb l'anterior
+mixed$r_sq
+r_sq - mixed$r_sq
+r_sq <- mixed$r_sq
+```
+
+No hi ha problemes de multicol·linealitat en el model sense la variable
+```ANOS2```.
+
+```{r, attr.source='.numberLines'}
+# Valors VIF
+vif(mixed$model)
+```
+
+### Segona eliminació de variables explicatives no significatives
+
+Consultarem la taula amb la significança de les variables explicatives per
+decidir quina variable eliminar.
+
+```{r, attr.source='.numberLines'}
+# Taula amb la significança de de les variables explicatives
+# Obté el coeficient de significança de les variables explicatives, que estan
+# en la columna "Pr(>|t|)" del resum del model
+significacio <- coef(summary(mixed$model))[, "Pr(>|t|)"]
+significacio <- significacio[!grepl("(Intercept)", names(significacio))]
+# Queda't només amb els valors més grans que 0,05 (variables no significatives)
+significacio_baixa <- significacio[significacio > 0.05]
+# Ordena de forma descendent
+significacio_baixa <- sort(significacio_baixa, decreasing = TRUE)
+# Mostra la taula amb kable
+kable(significacio_baixa,
+  format.args = list(decimal.mark = ",", big.mark = "."),
+  caption = "Variables explicatives no significatives després d'eliminar ANOS2",
+  col.names = c("Variable[Classe]", "p-valor")
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+```
+
+No eliminarem la variable ```ESTU```, ja que no totes les classes tenen un
+p-valor superior a 0,05.
+
+```{r, attr.source='.numberLines'}
+significacio[grep("ESTU", names(significacio))]
+```
+
+Eliminem la variable ```ESTRATO2``` ja que les classes tenen una significança
+baixa (p-valor > 0,05).
+
+```{r, attr.source='.numberLines'}
+significacio[grep("ESTRATO2", names(significacio))]
+# Eliminació de la variable no significativa ESTRATO2 de qualitative_vars
+qualitative_vars <- setdiff(qualitative_vars, "ESTRATO2")
+# Construir el model sense la variable ESTRATO2
+mixed <- build_model(qualitative_vars, train_dataset)
+```
+
+Després d'eliminar la variable ```ESTRATO2``` el valor de R^2^ ha baixat un
+0,4 %.
+
+```{r, attr.source='.numberLines'}
+# Mostrar el valor de R² el nou model i la diferència amb l'anterior
+mixed$r_sq
+r_sq - mixed$r_sq
+r_sq <- mixed$r_sq
+```
+
+No hi ha problemes de multicol·linealitat en el model sense les variables
+```ANOS2``` i ```ESTRATO2```.
+
+```{r, attr.source='.numberLines'}
+# Valors VIF
+vif(mixed$model)
+```
+
+### Tercera eliminació de variables explicatives no significatives
+
+```{r, attr.source='.numberLines'}
+significacio <- coef(summary(mixed$model))[, "Pr(>|t|)"]
+significacio <- sort(significacio, decreasing = TRUE)
+significacio <- significacio[!grepl("(Intercept)", names(significacio))]
+# Només amb els valors més grans que 0,05 (variables no significatives)
+significacio_baixa <- significacio[significacio > 0.05]
+# Mostra la taula amb kable
+kable(significacio_baixa,
+  format.args = list(decimal.mark = ",", big.mark = "."),
+  caption = "Variables explicatives no significatives",
+  col.names = c("Variable[Classe]", "p-valor")
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+```
+
+No eliminarem la variable ```ESTU```, ja que no totes les classes tenen un
+p-valor superior a 0,05.
+
+```{r, attr.source='.numberLines'}
+significacio[grep("ESTU", names(significacio))]
+```
+
+Eliminarem la variable ```SIESPA4``` ja que la variable té una significança
+baixa (valors de p-valor > 0,05).
+
+```{r, attr.source='.numberLines'}
+significacio[grep("SIESPA4", names(significacio))]
+# Eliminació de la variable no significativa SIESPA4 de qualitative_vars
+qualitative_vars <- setdiff(qualitative_vars, "SIESPA4")
+# Construir el model sense la variable SIESPA4
+mixed <- build_model(qualitative_vars, train_dataset)
+```
+
+Després d'eliminar la variable ```SIESPA4``` el valor de R^2^ ha baixat un
+0,001 %.
+
+```{r, attr.source='.numberLines'}
+# Mostrar el valor de R² el nou model i la diferència amb l'anterior
+mixed$r_sq
+r_sq - mixed$r_sq
+r_sq <- mixed$r_sq
+```
+
+No hi ha problemes de multicol·linealitat en el model sense les variables
+```ANOS2```, ```ESTRATO2``` i ```SIESPA4```.
+
+```{r, attr.source='.numberLines'}
+# Valors VIF
+vif(mixed$model)
+```
+
+### Quarta eliminació de variables explicatives no significatives
+
+Consultarem la taula amb la significança de les variables explicatives per
+decidir quina variable eliminar.
+
+```{r, attr.source='.numberLines'}
+significacio <- coef(summary(mixed$model))[, "Pr(>|t|)"]
+significacio <- sort(significacio, decreasing = TRUE)
+significacio <- significacio[!grepl("(Intercept)", names(significacio))]
+# Només amb els valors més grans que 0,05 (variables no significatives)
+significacio_baixa <- significacio[significacio > 0.05]
+# Mostra la taula amb kable
+kable(significacio_baixa,
+  format.args = list(decimal.mark = ",", big.mark = "."),
+  caption = "Variables explicatives no significatives",
+  col.names = c("Variable[Classe]", "p-valor")
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+```
+
+No eliminarem la variable ```ESTU```, ja que no totes les classes tenen un
+p-valor superior a 0,05.
+
+```{r, attr.source='.numberLines'}
+significacio[grep("ESTU", names(significacio))]
+```
+
+Eliminarem la variable ```SIESPM2``` ja que la variable té una significança
+baixa (valors de p-valor > 0,05).
+
+```{r, attr.source='.numberLines'}
+significacio[grep("SIESPM2", names(significacio))]
+# Eliminació de la variable no significativa SIESPM2 de qualitative_vars
+qualitative_vars <- setdiff(qualitative_vars, "SIESPM2")
+# Construir el model sense la variable SIESPM2
+mixed <- build_model(qualitative_vars, train_dataset)
+```
+
+Després d'eliminar la variable ```SIESPM2``` el valor de R^2^ ha baixat un
+0,001 %.
+
+```{r, attr.source='.numberLines'}
+# Mostrar el valor de R² el nou model i la diferència amb l'anterior
+mixed$r_sq
+r_sq - mixed$r_sq
+r_sq <- mixed$r_sq
+```
+
+No hi ha problemes de multicol·linealitat en el model sense les variables
+```ANOS2```, ```ESTRATO2```, ```SIESPA4``` i ```SIESPM2```.
+
+```{r, attr.source='.numberLines'}
+# Valors VIF
+vif(mixed$model)
+```
+
+### Cinquena eliminació de variables explicatives no significatives
+
+Consultarem la taula amb la significança de les variables explicatives per
+decidir quina variable eliminar.
+
+```{r, attr.source='.numberLines'}
+significacio <- coef(summary(mixed$model))[, "Pr(>|t|)"]
+significacio <- sort(significacio, decreasing = TRUE)
+significacio <- significacio[!grepl("(Intercept)", names(significacio))]
+# Només amb els valors més grans que 0,05 (variables no significatives)
+significacio_baixa <- significacio[significacio > 0.05]
+# Mostra la taula amb kable
+kable(significacio_baixa,
+  format.args = list(decimal.mark = ",", big.mark = "."),
+  caption = "Variables explicatives no significatives",
+  col.names = c("Variable[Classe]", "p-valor")
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+```
+
+No eliminarem la variable ```ESTU```, ja que no totes les classes tenen un
+p-valor superior a 0,05.
+
+```{r, attr.source='.numberLines'}
+significacio[grep("ESTU", names(significacio))]
+```
+
+Tampoc eliminem la variable ```REGULACION```, ja que no totes les seves classes
+tenen un p-valor superior a 0,05.
+
+```{r, attr.source='.numberLines'}
+significacio[grep("REGULACION", names(significacio))]
+```
+
+En lloc seu, eliminarem la variable ```SIESPA3``` ja no és una variable
+significativa.
+
+```{r, attr.source='.numberLines'}
+significacio[grep("SIESPA3", names(significacio))]
+# Eliminació de la variable no significativa SIESPA3 de qualitative_vars
+qualitative_vars <- setdiff(qualitative_vars, "SIESPA3")
+# Construir el model sense la variable SIESPA3
+mixed <- build_model(qualitative_vars, train_dataset)
+```
+
+Després d'eliminar la variable ```SIESPA3``` el valor de R^2^ ha baixat un
+0,02 %.
+
+```{r, attr.source='.numberLines'}
+# Mostrar el valor de R² el nou model i la diferència amb l'anterior
+mixed$r_sq
+r_sq - mixed$r_sq
+r_sq <- mixed$r_sq
+```
+
+No hi ha problemes de multicol·linealitat en el model sense les variables
+```ANOS2```, ```ESTRATO2```, ```SIESPA4```, ```SIESPM2``` i ```SIESPA3```.
+
+```{r, attr.source='.numberLines'}
+# Valors VIF
+vif(mixed$model)
+```
+
+### Sisena eliminació de variables explicatives no significatives
+
+Consultarem la taula amb la significança de les variables explicatives per
+decidir quina variable eliminar.
+
+```{r, attr.source='.numberLines'}
+significacio <- coef(summary(mixed$model))[, "Pr(>|t|)"]
+significacio <- sort(significacio, decreasing = TRUE)
+significacio <- significacio[!grepl("(Intercept)", names(significacio))]
+# Només amb els valors més grans que 0,05 (variables no significatives)
+significacio_baixa <- significacio[significacio > 0.05]
+# Mostra la taula amb kable
+kable(significacio_baixa,
+  format.args = list(decimal.mark = ",", big.mark = "."),
+  caption = "Variables explicatives no significatives",
+  col.names = c("Variable[Classe]", "p-valor")
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+```
+
+No eliminarem la variable ```ESTU```, ja que no totes les classes tenen un
+p-valor superior a 0,05.
+
+```{r, attr.source='.numberLines'}
+significacio[grep("ESTU", names(significacio))]
+```
+
+Tampoc eliminem la variable ```REGULACION```, ja que no totes les seves classes
+tenen un p-valor superior a 0,05.
+
+```{r, attr.source='.numberLines'}
+significacio[grep("REGULACION", names(significacio))]
+```
+
+Eliminarem la variable ```CONTROL``` ja que la variable té una significança
+baixa (valors de p-valor > 0,05).
+
+```{r, attr.source='.numberLines'}
+significacio[grep("CONTROL", names(significacio))]
+# Eliminació de la variable no significativa CONTROL de qualitative_vars
+qualitative_vars <- setdiff(qualitative_vars, "CONTROL")
+# Construir el model sense la variable CONTROL
+mixed <- build_model(qualitative_vars, train_dataset)
+```
+
+Després d'eliminar la variable ```CONTROL``` el valor de R^2^ ha baixat un
+0,02 %.
+
+```{r, attr.source='.numberLines'}
+# Mostrar el valor de R² el nou model i la diferència amb l'anterior
+mixed$r_sq
+r_sq - mixed$r_sq
+r_sq <- mixed$r_sq
+```
+
+No hi ha problemes de multicol·linealitat en el model sense les variables
+```ANOS2```, ```ESTRATO2```, ```SIESPA4```, ```SIESPM2```, ```SIESPA3``` i
+```CONTROL```.
+
+```{r, attr.source='.numberLines'}
+# Valors VIF
+vif(mixed$model)
+```
+
+### Setena eliminació de variables explicatives no significatives
+
+Consultarem la taula amb la significança de les variables explicatives per
+decidir quina variable eliminar.
+
+```{r, attr.source='.numberLines'}
+significacio <- coef(summary(mixed$model))[, "Pr(>|t|)"]
+significacio <- sort(significacio, decreasing = TRUE)
+significacio <- significacio[!grepl("(Intercept)", names(significacio))]
+# Només amb els valors més grans que 0,05 (variables no significatives)
+significacio_baixa <- significacio[significacio > 0.05]
+# Mostra la taula amb kable
+kable(significacio_baixa,
+  format.args = list(decimal.mark = ",", big.mark = "."),
+  caption = "Variables explicatives no significatives",
+  col.names = c("Variable[Classe]", "p-valor")
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+```
+
+No eliminarem la variable ```ESTU```, ja que no totes les classes tenen un
+p-valor superior a 0,05.
+
+```{r, attr.source='.numberLines'}
+significacio[grep("ESTU", names(significacio))]
+```
+
+Tampoc eliminem la variable ```REGULACION```, ja que no totes les seves classes
+tenen un p-valor superior a 0,05.
+
+```{r, attr.source='.numberLines'}
+significacio[grep("REGULACION", names(significacio))]
+```
+
+Eliminarem la variable ```SIESPA1``` ja que la variable té una significança
+baixa (valors de p-valor > 0,05).
+
+```{r, attr.source='.numberLines'}
+significacio[grep("SIESPA1", names(significacio))]
+# Eliminació de la variable no significativa SIESPA1 de qualitative_vars
+qualitative_vars <- setdiff(qualitative_vars, "SIESPA1")
+# Construir el model sense la variable SIESPA1
+mixed <- build_model(qualitative_vars, train_dataset)
+```
+
+Després d'eliminar la variable ```SIESPA1``` el valor de R^2^ ha baixat un
+0,02 %.
+
+```{r, attr.source='.numberLines'}
+# Mostrar el valor de R² el nou model i la diferència amb l'anterior
+mixed$r_sq
+r_sq - mixed$r_sq
+r_sq <- mixed$r_sq
+```
+
+No hi ha problemes de multicol·linealitat en el model sense les variables
+```ANOS2```, ```ESTRATO2```, ```SIESPA4```, ```SIESPM2```, ```SIESPA3```,
+```CONTROL``` i ```SIESPA1```.
+
+```{r, attr.source='.numberLines'}
+# Valors VIF
+vif(mixed$model)
+```
+
+### Resum del model final
+
+```{r, attr.source='.numberLines'}
+summary(mixed$model)
+```
+
+En el model mixt inicial l'efecte de les variables ```SEXO``` i ```TIPOPAIS```
+sobre el salari ha canviat significativament en comparació amb el model de
+l'apartat 1.5 degut a que en el model s'han inclòs altres variables que també
+influeixen en el salari, com ara l'antiguitat, la jornada anual pactada i altres
+variables qualitatives.
+
+L'AIC del model inicial amb totes les variables qualitatives era 180.149,
+després d'eliminar les variables no significatives, l'AIC del model reduït és
+180.618, per tant, el model reduït és lleugerament millor que el model inicial.
+
+### Off topic
+
+En aquest apartat, aplicarem un mètode automàtic de selecció de variables
+(Backward Elimination) per comparar els resultats amb l'estratègia manual
+utilitzada anteriorment.
+
+```{r, attr.source='.numberLines'}
+# Llista de variables qualitatives a incloure en el model
+qualitative_vars <- colnames(dataset)[sapply(dataset, is.factor)]
+# Construir el model mixt amb totes les variables qualitatives
+mixed <- build_model(qualitative_vars, train_dataset)
+```
+
+Apliquem el mètode de selecció de variables (Backward Elimination):
+
+```{r, attr.source='.numberLines'}
+backward <- step(mixed$model, direction = "backward")
+```
+
+Veiem que el procediment de selecció de variables (Backward Elimination).
+
+```{r, results='hide'}
+summary(backward)
+```
+
+| Pas | AIC.   | Variable eliminada |
+| --- | ------ | ------------------ |
+| 0 | 180149.3 |                    |
+| 1 | 180147.7 | SIESPM2            |
+| 2 | 180146   | SIESPA4            |
+| 3 | 180144.4 | CONTROL            |
+
+: Eliminació de variables amb la funció ```step()``` utilitzant backward elimination
+
+```{r, echo=FALSE}
+# Elimina els objectes temporals
+rm(backward, build_model, qualitative_vars)
+```
+
+## Diagnosi del model
+
+Realitzeu una diagnosi gràfica del model múltiple escollit. Genereu i analitzeu
+un gràfic de residus (de valors observats menys els previstos pel model) vs.
+valors ajustats, per veure l'homocedasticitat, i un gràfic quantil-quantil (Q-Q
+plot) que compara els residus del model amb els valors d'una variable que es
+distribueix normalment. Interpreteu els resultats.
+
+**Resposta:**
+
+```{r, attr.source='.numberLines', fig.align='center'}
+# Gràfics de diagnosi del model
+par(mfrow = c(1, 2)) # Configura la disposició de les gràfiques
+plot(mixed$model, which = 1, main = "Model Fit")
+plot(mixed$model, which = 2, main = "Q-Q Plot")
+```
+
+En la gràfica del model fit, els residus semblen estar distribuïts aleatòriament
+al voltant de zero, sense cap patró clar, la qual cosa indica que el model
+s'ajusta bé a les dades i compleix amb l'assumpció d'homocedasticitat. No
+obstant això, hi ha alguns punts que es troben fora dels límits de les línies de
+referència.
+
+En la gràfica Q-Q, els punts segueixen aproximadament la línia diagonal,
+indicant que els residus del model segueixen una distribució normal. Després,
+creix la pendent i finalment els punts es desvien de la línia, la qual cosa
+podria indicar la presència d'alguns valors atípics o influents.
+
+## Predicció del model
+
+Utilitzeu el model múltiple per predir els salaris en la taula test. Representeu
+gràficament els valors previstos davant dels valors observats. Avalueu la
+precisió del model mitjançant l'arrel quadrada de l'error quadràtic mitjà
+(```RMSE```). Interpreteu breument el resultat.
+
+**Resposta:**
+
+```{r, attr.source='.numberLines', fig.align='center'}
+# Prediccions sobre el conjunt de test
+predictions <- predict(mixed$model, newdata = test_dataset)
+# Gràfic de valors previstos vs valors observats
+ggplot(data = NULL, aes(x = test_dataset$RETRINOIN, y = predictions)) +
+  geom_point(color = "blue", alpha = 0.5) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(
+    title = "Valors Predits vs Valors Observats",
+    x = "Valors Observats",
+    y = "Valors Predits"
+  ) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+# Càlcul del RMSE
+rmse_value <- sqrt(mean((test_dataset$RETRINOIN - predictions)^2))
+rmse_value
+```
+
+```{r, echo=FALSE}
+# Elimina els objectes temporals
+rm(predictions, mixed, build_model, r_sq)
+```
+
+Els valors previstos es distribueixen al voltant de la línia de referència
+(la línia diagonal vermella), la qual cosa indica que el model té un bon ajust
+als valors observats. No obstant això, hi ha certa dispersió a mesura que
+el salari és cada vegada més elevat, on el model sembla subestimar els
+valors més alts. En aquest sentit el valor de l'RMSE es sensible als valors
+atípics i per aquest motiu el seu valor és tan elevat. A més els sous negatius
+previstos no tenen cap sentit. Altrament, aquesta dispersió ja s'havia vist en
+la gràfica de residus vs valors ajustats i en la gràfica Q-Q plot.
+
+# Regressió Logística
+
+En aquesta segona part, crearem un model per classificar les persones
+treballadores en dos grups: salari alt o no.
+
+## Preparació de les dades (Binarització)
+
+Es vol estudiar quins factors influeixen en la probabilitat de tenir un salari
+alt.
+
+- Per a això, creeu una nova variable binària (dicotòmica) anomenada
+  ```SalariAlt```.
+- **Definició del llindar**: Per a aquest estudi, farem servir la **mediana
+  global** de ```RETRINOIN``` (i no la mediana per subgrups) com a punt de tall.
+  Aquesta elecció genera una divisió aproximadament equilibrada (50/50) i
+  facilita l'avaluació del model.
+- **Codificació**: Creeu la variable ```SalariAlt```, que prendrà el valor 1
+  (esdeveniment d'interès, “Alt”) si ```RETRINOIN``` és **superior a la
+  mediana** del salari de la mostra, i el valor 0 (“No Alt”, categoria de
+  referència) en cas contrari. Convertiu aquesta nova variable a factor.
+- Per evitar problemes de col·linealitat, no farem servir la variable
+  ```RETRINOIN``` original en els models de regressió logística binària (però sí
+  que mantindrem la resta de predictors del model lineal múltiple).
+- Reutilitzeu la partició de ``train/test`` definida a l'Apartat 1.4, ara
+  aplicada al dataset que inclou la nova variable ```SalariAlt```.
+
+**Resposta:**
+
+```{r, attr.source='.numberLines'}
+# Calcular la mediana global de RETRINOIN
+mediana_salario <- median(dataset$RETRINOIN, na.rm = TRUE)
+# Crear la nova variable SalariAlt
+dataset <- transform(dataset,
+  SalariAlt = ifelse(RETRINOIN > mediana_salario, 1, 0)
+)
+# Convertir la variable SalariAlt a factor amb els valors 0: "No Alt", 1: "Alt"
+dataset$SalariAlt <- factor(
+  dataset$SalariAlt,
+  levels = c(0, 1),
+  labels = c("No Alt", "Alt")
+)
+# Mostrar la informació del dataset per verificar la nova variable
+str(dataset$SalariAlt)
+# Reutilitzar la partició train/test definida a l'Apartat 1.4
+train_dataset <- dataset[train_indexes, ]
+test_dataset <- dataset[-train_indexes, ]
+```
+
+```{r, echo=FALSE}
+# Elimina els objectes temporals
+rm(train_indexes, mediana_salario)
+```
+
+## Estimació del model de regressió logística
+
+Fent servir el conjunt ```train``` (80 %), estimeu un model de regressió
+logística on la variable dependent sigui ```SalariAlt``` i les explicatives
+siguin ```SEXO```, ```ANOANTI```, ```JAP```, ```ESTU```, ```TIPOCON```,
+```CNACE_grp```, ```CNO1_grp``` i ```TIPOPAIS```. Mostreu el resum del model i
+interpreteu-lo breument. Eliminaríeu alguna variable del model? Justifiqueu la
+vostra decisió.
+
+Per als apartats següents, considereu com a model logístic de referència aquest
+model inicial, encara que en la vostra discussió hàgiu proposat modificar-lo.
+
+**Resposta:**
+
+```{r, attr.source='.numberLines'}
+# Estimació del model de regressió logística
+logistic_model <- glm(
+  formula = SalariAlt ~ SEXO + ANOANTI + JAP + ESTU + TIPOCON + CNACE_grp +
+    CNO1_grp + TIPOPAIS,
+  data = train_dataset,
+  family = binomial
+)
+```
+
+Si mirem el resum del model logístic veiem que la variable ```TIPOPAIS``` no es
+significativa, tenint un p-valor proper al 50%, sent una variable categorica que
+només té dues categories.
+
+```{r, attr.source='.numberLines'}
+summary(logistic_model)
+```
+
+## Càlcul de les OR (Odds-Ratio)
+
+Calculeu les OR per a les variables més rellevants del model i interpreteu-les.
+Resumiu quines de les variables es poden considerar factors de risc o de
+protecció.
+
+**Resposta:**
+
+```{r, attr.source='.numberLines'}
+significacio <- coef(summary(logistic_model))[, "Pr(>|z|)"]
+# Eliminar la variable ESTU i l'intercept
+significacio <- significacio[!grepl("ESTU", names(significacio))]
+significacio <- significacio[names(significacio) != "(Intercept)"]
+# Variables més significatives
+significacio <- significacio[significacio < 0.001]
+# Elimina les variables que tenen més classes CNACE_grp i CNO1_grp
+significacio <- significacio[!grepl("CNACE_grp", names(significacio))]
+significacio <- significacio[!grepl("CNO1_grp", names(significacio))]
+var_names <- names(significacio)
+# Calcular els OR (Odds-Ratio) per a les variables més rellevants del model
+or_values <- exp(coef(logistic_model))[var_names]
+or_values <- sort(or_values, decreasing = TRUE)
+# Mostrar la taula amb kable
+kable(or_values,
+  format.args = list(decimal.mark = ",", big.mark = "."),
+  caption = paste(
+    "OR de les variables més rellevants del model",
+    "($Pr(>|z|) < 0,001)$"
+  ),
+  col.names = c("Variable", "Odds Ratio")
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+```
+
+La variable ```ANOANTI``` amb $OR > 1$ és un factor de risc, ja que augmenta la
+probabilitat de tenir un salari alt. En canvi la i ```JAP``` amb $OR = 1$ és un
+factor neutre, ja que no afecta la probabilitat de tenir un salari alt.
+Finalment, la variable ```SEXO``` amb $OR < 1$ és un factor de protecció, ja que
+disminueix la probabilitat de tenir un salari alt.
+
+## Matriu de confusió
+
+Avalueu la precisió del model sobre el conjunt test. Suposeu un punt de tall de
+probabilitat de 0.5. Per a això:
+
+- Calculeu la matriu de confusió (considerant ```SalariAlt = 1``` (“Alt”) com la
+  classe positiva) i interpreteu-la breument.
+- Calculeu i interpreteu la **Exactitud (Accuracy)**, **la Sensibilitat
+  (Sensitivity)** i **l'Especificitat (Specificity)** del model.
+
+**Resposta:**
+
+El conjunt de prova té 2.000 files.
+
+```{r, attr.source='.numberLines'}
+nrow(test_dataset)
+```
+
+En la següent taula es mostra la matriu de confusió del model logístic sobre el
+conjunt de proves.
+
+```{r, attr.source='.numberLines'}
+# Prediccions de probabilitats sobre el conjunt de test
+prob_predictions <- predict(
+  logistic_model,
+  newdata = test_dataset,
+  type = "response"
+)
+# Convertir les probabilitats a classes amb un llindar de 0.5
+class_predictions <- ifelse(prob_predictions > 0.5, "Alt", "No Alt")
+class_predictions <- factor(class_predictions, levels = c("No Alt", "Alt"))
+# Calcular manualment la matriu de confusió
+confusion_matrix <- table(
+  Predicted = class_predictions,
+  Actual = test_dataset$SalariAlt
+)
+# afegeix dos columnes i dues files a la confusion_matrix
+confusion_matrix <- addmargins(confusion_matrix)
+kable(confusion_matrix,
+  format.args = list(decimal.mark = ",", big.mark = "."),
+  caption = "Matriu de confusió",
+  col.names = c("No Alt", "Alt", "Sum")
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  ) |>
+  column_spec(1, bold = TRUE) |>
+  add_header_above(c(" " = 1, "Real" = 3))
+```
+
+En la següent taula es mostren les mètriques del model logístic sobre el conjunt
+de proves.
+
+```{r, attr.source='.numberLines'}
+# Calcular Exactitud, Sensibilitat i Especificitat
+tp <- confusion_matrix["Alt", "Alt"]
+tn <- confusion_matrix["No Alt", "No Alt"]
+fp <- confusion_matrix["Alt", "No Alt"]
+fn <- confusion_matrix["No Alt", "Alt"]
+accuracy <- (tp + tn) / (tp + fp + tn + fn)
+sensitivity <- tp / (tp + fn)
+specificity <- tn / (tn + fp)
+# mostrar els resultats en una taula
+metrics <- data.frame(
+  Metric = c(
+    "Exactitud (Accuracy)",
+    "Sensibilitat (Sensitivity)",
+    "Especificitat (Specificity)"
+  ),
+  Value = percent(c(accuracy, sensitivity, specificity))
+)
+kable(metrics,
+  format.args = list(decimal.mark = ",", big.mark = "."),
+  caption = "Mètriques del Model",
+  col.names = c("Mètrica", "Percentatge")
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+```
+
+Del total de 2.000 ($tp+tn+fp+fn$) persones treballadores en el conjunt de
+proves, 1.541 ($tp+tn$) han estat correctament classificades i 459 ($fp+fn$) no.
+El que representa una exactitud (accuracy) del 77,05 %.
+
+La sensibilitat (sensitivity) del model és del 75.83 % $(\frac{tp}{tp+fn})$,
+això vol dir que el model ha identificat correctament 753 $(tp)$ persones
+treballadores amb salari "Alt" de 993 $(tp+fn)$, les persones treballadores que
+verdaderament tenen un salari "Alt".
+
+L'especificitat (specificity) del model és del 78,00 % $(\frac{tn}{tn+fp})$,
+això vol dir que el model ha identificat correctament 788 $(tn)$ persones
+treballadores amb salari "No alt" de 1.007 $(tn+fp)$, les persones treballadores
+que verdaderament tenen un salari "No alt".
+
+**Off topic:**
+
+Alternativament es pot utilitzar la funció ```confusionMatrix()``` de la
+biblioteca ```caret``` per calcular la matriu de confusió i les mètriques
+associades.
+
+```{r, attr.source='.numberLines'}
+# Matriu de confusió
+confusionMatrix(
+  data = class_predictions,
+  reference = test_dataset$SalariAlt,
+  positive = "Alt"
+)
+```
+
+```{r, echo=FALSE}
+# Elimina els objectes temporals
+rm(confusion_matrix, tp, tn, fp, fn)
+```
+
+
+## Predicció
+
+Identifiqueu els 5 perfils de persones treballadores del conjunt test amb la
+probabilitat prevista més alta de ser ```SalariAlt```. Mostreu en una taula les
+seves característiques principals i la seva probabilitat prevista.
+
+**Resposta:**
+
+```{r, attr.source='.numberLines'}
+# Afegir les probabilitats previstes al conjunt de test
+test_dataset$Prob_SalariAlt <- prob_predictions
+# Ordenar el conjunt de test per probabilitat prevista en ordre descendent
+sorted_test <- test_dataset[order(-test_dataset$Prob_SalariAlt), ]
+# Seleccionar els 5 perfils amb la probabilitat prevista més alta
+top_5_profiles <- head(sorted_test, 5)
+# Seleccionar les característiques principals i la probabilitat prevista
+top_5_profiles <- top_5_profiles[, c(
+  "SEXO", "ANOANTI", "JAP", "Prob_SalariAlt"
+)]
+# Mostrar la taula amb kable
+kable(top_5_profiles,
+  format.args = list(decimal.mark = ",", big.mark = "."),
+  caption = "Els 5 perfils amb més probabilitat prevista de tenir un salari alt",
+  col.names = c(
+    "SEXO", "ANOANTI", "JAP", "Probabilitat prevista"
+  )
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+```
+
+## Bondat d'ajustament i corba ROC
+
+Avalueu l'eficàcia global del model.
+
+- Calculeu el p-valor del test Chi-quadrat (diferència de deviances nul·la i
+  residual) fent servir ```pchisq()```. El model és globalment significatiu?
+- Dibuixeu la corba ROC i calculeu l'àrea sota la corba (```AUC```). Podeu
+  utilitzar la biblioteca ```pROC```. Debateu el resultat.
+
+**Resposta:**
+
+El model és globalment significatiu, ja que el p-valor és molt proper a 0.
+
+```{r, attr.source='.numberLines'}
+# Deviances
+null_dev <- logistic_model$null.deviance
+resid_dev <- logistic_model$deviance
+# Diferència de deviances
+diff_dev <- null_dev - resid_dev
+# Graus de llibertat (diferència en paràmetres)
+df <- logistic_model$df.null - logistic_model$df.residual
+# p-valor del test Chi-quadrat
+p_value <- pchisq(diff_dev, df = df, lower.tail = FALSE)
+p_value
+```
+
+La capacitat del model per diferenciar entre les classes positives i negatives 
+és excel·lent.
+
+```{r, attr.source='.numberLines'}
+# Dibuixar la corba ROC i calcular l'AUC
+roc_curve <- roc(
+  response = test_dataset$SalariAlt,
+  predictor = prob_predictions,
+  levels = c("No Alt", "Alt")
+)
+# Plot de la corba ROC
+plot(roc_curve, main = "ROC Curve", col = "blue", lwd = 2)
+# Càlcul de l'AUC
+auc_value <- auc(roc_curve)
+auc_value
+```
+
+És excel·lent perquè té un AUC de
+`r format(auc_value, scientific = FALSE, big.mark = ".", decimal.mark = ",")`
+(entre 0,7 i 0,8 es considera acceptable, entre 0,8 i 0,9 és excel·lent, i
+superior a 0,9 és excepcional).
+
+```{r, echo=FALSE}
+# Elimina els objectes temporals
+rm(roc_curve, prob_predictions, class_predictions, logistic_model)
+```
+
+# Resum executiu i Reflexió Ètica
+
+## Taula Resum
+
+Resumiu les conclusions de l'estudi en una taula, indicant la pregunta de
+recerca, els resultats estadístics clau i una breu conclusió.
+
+**Resposta:**
+
+| Apartat | Pregunta de Recerca | Resultats Estadístics Clau | Conclusió Breu |
+| ------- | ------------------- | -------------------------- | -------------- |
+| 1.2 | En el conjunt de dades hi ha variables quantitatives que estiguin correlacionades? | Correlació directa: ```BASE``` amb ```COTIZA``` (0,95) i ```IRPFMES``` amb ```RETRINOIN``` (0,91); Correlació inversa: ```VAL``` amb ```VAN``` (-0,92) | Algunes variables estan fortament correlacionades, en les correlacions positives és pot eliminar una de les dues variables, en les negatives en incrementar el valor d'una variable es disminueix el valor de l'altra. |
+| 1.5 | Quin és l'efecte de la variable ```SEXO``` i ```TIPOPAIS``` sobre el salari mitjà anual? | Bretxa salarial anual mitja, salari anual mig i classe desfavorable; ```TIPOPAIS``` = `r format(as.numeric(estimation_15_nacionalitat["TIPOPAISEstranger"]), scientific = FALSE, big.mark = ".", decimal.mark = ",")` euros | Les dones tenen un salari mitjà anual `r format(as.numeric(estimation_15_sexo["SEXODona"]), scientific = FALSE, big.mark = ".", decimal.mark = ",")` euros inferior al dels homes `r format(as.numeric(estimation_15_sexo["(Intercept)"]), scientific = FALSE, big.mark = ".", decimal.mark = ",")` euros; els treballadors estrangers tenen un salari mitjà anual `r format(as.numeric(estimation_15_nacionalitat["TIPOPAISResta del món"]), scientific = FALSE, big.mark = ".", decimal.mark = ",")` euros inferior al dels treballadors nacionals `r format(as.numeric(estimation_15_nacionalitat["(Intercept)"]), scientific = FALSE, big.mark = ".", decimal.mark = ",")` euros. |
+| 1.6 | Quines altres variables influeixen en el salari mitjà anual? | Variables significatives: ```ANOANTI```, ```JAP```, ```ESTU```, ```TIPOCON```, ```CNACE_grp```, ```CNO1_grp``` | L'antiguitat, la jornada anual pactada, el nivell d'estudis, el tipus de contracte, el sector d'activitat i la professió també influeixen significativament en el salari mitjà anual. |
+| 1.7 | Es pot eliminar alguna variable explicativa del model sense perdre capacitat predictiva? | Significança, R^2^, VIF | S'han eliminat 7 variables explicatives no significatives sense perdre la capacitat predictiva del model. |
+| 1.5, 1.6 i 1.7 | Quin és el model de regressió lineal que millor explica la variabilitat del salari mitjà anual? | R^2^ | El model mixt amb 16 variables explicatives és el que millor representa la variabilitat del salari mitjà anual. |
+| 1.8 | Es pot confiar en la inferència del model? El model és igual de precís a tot arreu? | Normalitat i homocedasticitat | El model compleix amb l'assumpció d'homocedasticitat i de normalitat, tot i que hi ha alguns valors atípics o influents que augmenten a mesura que puja el salari. |
+| 1.9 | Quin és l'error de predicció del model? | RMSE = `r format(rmse_value, scientific = FALSE, big.mark = ".", decimal.mark = ",")` euros | El model té un error de predicció elevat degut a la presència de valors atípics o influents, especialment en sous alts (Apartat 1.9). No obstant això, en la gràfica de valors previstos vs valors observats es pot observar que el model té un bon ajust als valors observats. |
+| 2.2 | Influeixen totes les variables explicatives en la probabilitat de tenir un salari alt? | Variables no significatives: ```TIPOPAIS``` $(p > 0,05)$ | La variable ```TIPOPAIS``` no té un efecte significatiu en la probabilitat de tenir un salari alt. |
+| 2.3 | Quins factors influeixen en la probabilitat de tenir un salari alt? | Factors de risc: ```ANOANTI``` $(OR > 1)$; Factor neutre: ```JAP``` $(OR = 1)$; Factor de protecció: ```SEXO``` $(OR < 1)$; | La variable ```ANOANTI``` augmenta la probabilitat de tenir un salari alt, mentre que ```SEXO``` la disminueix. |
+| 2.4 | Quina és la precisió del model de regressió logística? | Exactitud: `r format(accuracy * 100, scientific = FALSE, big.mark = ".", decimal.mark = ",")` %; Sensibilitat: `r format(sensitivity * 100, scientific = FALSE, big.mark = ".", decimal.mark = ",")` %; Especificitat: `r format(specificity * 100, scientific = FALSE, big.mark = ".", decimal.mark = ",")` % | El model té una bona precisió per classificar salaris alts. |
+| 2.5 | Quins són els 5 perfils amb més probabilitat de tenir un salari alt? | Perfils amb característiques principals i probabilitats previstes | Els perfils amb més probabilitat de tenir un salari alt es mostren en la taula. |
+| 2.6 | Quin és la capacitat del model per diferenciar entre salaris alts i no alts? | AUC: `r format(auc_value, scientific = FALSE, big.mark = ".", decimal.mark = ",")` | El model té una capacitat excel·lent per diferenciar entre salaris alts i no alts. |
+
+: Resum de les conclusions de l'estudi
+
+```{r, echo=FALSE}
+# Elimina els objectes temporals
+rm(accuracy, sensitivity, specificity, estimation_15_nacionalitat, rmse_value)
+```
+
+## Conclusions i Reflexió Ètica
+
+Redacteu una breu conclusió adreçada a una audiència no tècnica (màxim 2500
+caràcters totals) en què es respongui de manera crítica a les qüestions
+següents. Tingueu present que, en aquesta activitat, la “bretxa de gènere” s'ha
+mesurat exclusivament a partir de la variable ```SEXO``` (sexe registrat
+home/dona), que utilitzem com a proxy limitada del gènere, atès que el dataset
+no incorpora identitats no binàries ni altres expressions de gènere.
+
+- Basant-vos en els vostres resultats, què ha passat amb la bretxa salarial de
+  gènere? Compareu el resultat del model lineal simple (Apartat 1.5) amb el del
+  model múltiple (Apartat 1.7). Què podeu concloure sobre la **bretxa salarial
+  “bruta” vs. la bretxa salarial “ajustada”**?
+- Quines limitacions tenen les dades i els models utilitzats (variables no
+  observades, possibles biaixos, supòsits del model…)? Com afecten aquestes
+  limitacions a la interpretació ètica de la bretxa salarial?
+
+**Resposta:**
+
+En el model lineal simple (Apartat 1.5), la bretxa salarial entre homes i dones
+era de 6.472,0 euros, amb les dones guanyant menys que els homes. En canvi, en
+el model múltiple (Apartat 1.7), després d'ajustar-lo amb altres factors com ara
+l'antiguitat, la jornada anual pactada i altres variables qualitatives, la
+bretxa salarial es va reduir a 5.103,3 euros. Això indica que una part de la
+bretxa salarial es pot atribuir a factors diferents del gènere, com ara les
+característiques laborals i demogràfiques. Així, la bretxa salarial “bruta”
+(sense ajustos) és més gran que la bretxa salarial “ajustada” (després dels
+ajustos), suggerint que altres variables expliquen part de la diferència
+salarial entre homes i dones.
+
+```{r, attr.source='.numberLines'}
+sexo_summary <- data.frame(
+  Model = c("Model Lineal Simple (1.5)", "Model Lineal Múltiple (1.7)"),
+  Bretxa_Salarial_Euros = c(
+    as.numeric(estimation_15_sexo["(Intercept)"]),
+    as.numeric(estimation_17["(Intercept)"])
+  ),
+  Efecte_SEXO_Euros = c(
+    as.numeric(estimation_15_sexo["SEXODona"]),
+    as.numeric(estimation_17["SEXODona"])
+  )
+)
+kable(sexo_summary,
+  format.args = list(decimal.mark = ",", big.mark = ".", digits = 2),
+  caption = "Comparació dels apartats 1.5 i 1.7",
+  col.names = c("Model", "Bretxa Salarial", "Efecte de SEXO")
+) |>
+  kable_styling(
+    "striped",
+    latex_options = c("striped", "scale_down", "repeat_header"),
+    position = "center",
+    full_width = FALSE
+  )
+```
+
+Les limitacions de les dades i els models utilitzats inclouen la manca de
+variables rellevants que podrien influir en els salaris, com ara l'experiència
+laboral, el nivell educatiu, la indústria específica i la ubicació geogràfica.
+A més, el conjunt de dades només inclou el sexe binari (home/dona), la qual cosa
+no reflecteix la diversitat de gènere existent en la societat. Aquests biaixos
+podrien afectar la interpretació ètica de la bretxa salarial, ja que no es
+consideren totes les dimensions que podrien contribuir a les desigualtats
+salarials. A més, els supòsits dels models estadístics, com la linealitat i la
+independència dels errors, podrien no complir-se completament, la qual cosa
+podria afectar la validesa dels resultats. Per tant, és important interpretar
+els resultats amb precaució i considerar aquestes limitacions en qualsevol
+anàlisi ètica de la bretxa salarial.
+
+```{r, echo=FALSE}
+# Elimina els objectes temporals
+rm(sexo_summary, estimation_15_sexo, estimation_17)
+```
