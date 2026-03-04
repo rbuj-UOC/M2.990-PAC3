@@ -4,8 +4,6 @@ author: "Robert Buj"
 date: "19/12/2025"
 output:
   pdf_document:
-    includes:
-      in_header: header.tex
     toc: true
     toc_depth: 2
     number_sections: true
@@ -13,6 +11,8 @@ output:
     toc: true
     toc_depth: 2
     number_sections: true
+header-includes:
+  - \usepackage[catalan]{babel}
 toc-title: "Taula de continguts"
 ---
 
